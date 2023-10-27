@@ -1,6 +1,4 @@
 #include "libs.h"  // OLHAR O ARQUIVO libs.h e fazer alteracoes se necessario
-#include "fifo.h"
-#include "lru.h"
 #include "memory.h"
 
 int main(int argc, char *argv[]) {
@@ -17,14 +15,15 @@ int main(int argc, char *argv[]) {
 
     void *memory = createMemory(atoi(argv[2]));
     
-    if (!strcmp(argv[3], "fifo") || !strcmp(argv[3], "FIFO"))
+    if (!strcmp(argv[3], "fifo") || !strcmp(argv[3], "FIFO")) {
         memoryManagement(memory, test, FIFOAlgorithm);
 
-    else if (!strcmp(argv[3], "lru") || !strcmp(argv[3], "LRU"))
+    } else if (!strcmp(argv[3], "lru") || !strcmp(argv[3], "LRU")) {
         memoryManagement(memory, test, LRUAlgorithm);
 
-    else
+    } else {
         printf("ERRO Algoritmo nao reconhecido!\nApenas FIFO ou LRU disponiveis\n");
+    }
 
     fclose(test);
     freeMemory(memory);

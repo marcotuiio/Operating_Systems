@@ -6,11 +6,13 @@
 #include <string.h>
 #include <stdbool.h>
 #include <math.h>
+#include <time.h>
 
 #define PAGE_ENTRIES 256  // qntd de paginas
 #define PAGE_SIZE 256  // tamanho em bytes de cada pagina
 #define TLB_ENTRIES 16   // qntd de entradas na cache TLB
 #define PHYSICAL_MEM_SIZE 65536  // tamanho em bytes da memoria fisica
-#define BIN_FILE "BACKING_STORE.bin"
+#define BIN_FILE "BACKING_STORE_sequencial.bin"
+#define OUTPUT_FILE "correct.txt"
 
 #endif

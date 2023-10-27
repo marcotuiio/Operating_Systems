@@ -4,11 +4,18 @@
 #include "libs.h"
 
 // Tipo de algoritmo de substituicao de paginas de forma generica no prototipo da funcao
-typedef void (*PageReplaceAlgorith)(int);
+typedef void (*PageReplaceAlgorithm)(void **memoryType, void *entry, int size);
 
 // Realiza a logica principal do gerenciamento de memoria
 // Leitura da memoria auxiliar, busca nas tabelas e TLB, e chama substituicao de paginas
-void memoryManagement(void *memory, FILE *testFile, PageReplaceAlgorith pageReplaceAlgorith);
+void memoryManagement(void *memory, FILE *testFile, PageReplaceAlgorithm pageReplaceAlgorithm);
+
+// Calcula endereço físico e imprime na tela
+void printAddress(FILE *output, int *offsetBin, int *frameBin, int logicalDecimal, int toPrint);
+
+// Algoritmos de substituicao de paginas
+void FIFOAlgorithm(void **memoryType, void *entry, int size);
+void LRUAlgorithm(void **memoryType, void *entry, int size);
 
 // Cria a estrutura principal da memoria com os tamanhos estabelecidos
 void *createMemory(int frames);
