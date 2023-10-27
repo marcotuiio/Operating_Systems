@@ -135,7 +135,7 @@ void memoryManagement(void *memory, FILE *testFile, PageReplaceAlgorithm pageRep
     fprintf(output, "+------------------+------------+-----------------+\n");
     fprintf(output, "| %-16s | %-10d | %-15s |\n", "TOTAL ACCESS", totalAccess, "-");
     fprintf(output, "| %-16s | %-10d | %-15s |\n", "PAGE HITS", mem->hitPage + mem->hitTlb, "-");
-    fprintf(output, "| %-16s | %-10d | %-15s |\n", "PAGE FAULT", mem->pageFault, "-");
+    fprintf(output, "| %-16s | %-10d | %.2f%%          |\n", "PAGE FAULT", mem->pageFault, (float)mem->pageFault / totalAccess * 100);
     fprintf(output, "| %-16s | %-10d | %.2f%%           |\n", "TLB HIT", mem->hitTlb, (float)mem->hitTlb / totalAccess * 100);
     fprintf(output, "| %-16s | %-10d | %.2f%%          |\n", "Page Table HIT", mem->hitPage, (float)mem->hitPage / totalAccess * 100);
     fprintf(output, "+------------------+------------+-----------------+\n");
