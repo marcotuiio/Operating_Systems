@@ -95,9 +95,9 @@ void memoryManagement(void *memory, FILE *testFile, PageReplaceAlgorithm pageRep
 
                 Entry *entry = createEntry(pageNumber, decimalToBinary(frameToSet, 8));
 
-                pageReplaceAlgorithm(mem->TLB, entry, TLB_ENTRIES);
+                pageReplaceAlgorithm(mem, mem->TLB, entry, TLB_ENTRIES);
 
-                pageReplaceAlgorithm(mem->pageTable, entry, PAGE_ENTRIES);
+                pageReplaceAlgorithm(mem, mem->pageTable, entry, PAGE_ENTRIES);
 
                 int *auxFrame = decimalToBinary(frameToSet, 8);
                 printAddress(output, offsetBin, auxFrame, logicalDecimal, toPrint);
@@ -134,7 +134,7 @@ void memoryManagement(void *memory, FILE *testFile, PageReplaceAlgorithm pageRep
     fprintf(output, "| %-16s | %-10s | %-15s |\n", "CATEGORY", "COUNT", "RATE");
     fprintf(output, "+------------------+------------+-----------------+\n");
     fprintf(output, "| %-16s | %-10d | %-15s |\n", "TOTAL ACCESS", totalAccess, "-");
-    fprintf(output, "| %-16s | %-10d | %-15s |\n", "PAGE HITS", mem->hitPage + mem->hitTlb, "-");
+    fprintf(output, "| %-16s | %-10d | %.2f%%          |\n", "PAGE HITS", mem->hitPage + mem->hitTlb, (float)(mem->hitPage + mem->hitTlb) / totalAccess * 100);
     fprintf(output, "| %-16s | %-10d | %.2f%%          |\n", "PAGE FAULT", mem->pageFault, (float)mem->pageFault / totalAccess * 100);
     fprintf(output, "| %-16s | %-10d | %.2f%%           |\n", "TLB HIT", mem->hitTlb, (float)mem->hitTlb / totalAccess * 100);
     fprintf(output, "| %-16s | %-10d | %.2f%%          |\n", "Page Table HIT", mem->hitPage, (float)mem->hitPage / totalAccess * 100);
@@ -158,7 +158,7 @@ void printAddress(FILE *output, int *offsetBin, int *frameBin, int logicalDecima
     free(physicalAddress);
 }
 
-void FIFOAlgorithm(void **memoryType, void *entry, int size) {
+void FIFOAlgorithm(void *mem, void **memoryType, void *entry, int size) {
     for (int i = 0; i < size; i++) {
         if (!memoryType[i]) {
             memoryType[i] = entry;
@@ -166,17 +166,22 @@ void FIFOAlgorithm(void **memoryType, void *entry, int size) {
         }
     }
 
+    // Memory *memory = mem;
     if (size == 16) {
+        // Entry *oldest = memoryType[OLDEST_TBL];
+        // Frame *vazando = memory->physicalMemory[binaryToDecimal(oldest->frameNumber, 8)];
         memoryType[OLDEST_TBL] = entry;
         OLDEST_TBL = (OLDEST_TBL + 1) % 16;
 
     } else {
+        // Entry *oldest = memoryType[OLDEST_TBL];
+        // Frame *vazando = (memory->physicalMemory[binaryToDecimal(oldest->frameNumber, 8)]);
         memoryType[OLDEST_PT] = entry;
         OLDEST_PT = (OLDEST_PT + 1) % 256;
     }
 }
 
-void LRUAlgorithm(void **memoryType, void *entry, int size) {
+void LRUAlgorithm(void *mem, void **memoryType, void *entry, int size) {
     if (!memoryType[0]) {
         memoryType[0] = entry;
         return;
@@ -194,6 +199,9 @@ void LRUAlgorithm(void **memoryType, void *entry, int size) {
             oldestIndex = i;
         }
     }
+    // Memory *memory = mem;
+    // Entry *oldestEntry = memoryType[oldestIndex];
+    // Frame *vazando = (memory->physicalMemory[binaryToDecimal(oldestEntry->frameNumber, 8)]);
     memoryType[oldestIndex] = entry;
 }
 
@@ -350,23 +358,41 @@ void freeMemory(void *memory) {
                 for (int j = 0; j < PAGE_SIZE; j++) {
                     Address *address = data[j];
                     if (!address) continue;
-                    if (address->offset) free(address->offset);
-
+                    if (address->offset) {
+                        free(address->offset);
+                        address->offset = NULL;
+                    }
+                    if (address->logicalAddress) {
+                        free(address->logicalAddress);
+                        address->logicalAddress = NULL;
+                    }
+                   
                     if (address) free(address);
                 }
                 free(data);
             }
-            if (f->frameNumber) free(f->frameNumber);
+            if (f->frameNumber) {
+                free(f->frameNumber);
+                f->frameNumber = NULL;
+            }
             free(f);
+            f = NULL;
         }
     }
 
     for (int i = 0; i < PAGE_ENTRIES; i++) {
         Entry *entry = mem->pageTable[i];
-        if (entry) continue;
-        // if (entry->pageNumber) free(entry->pageNumber);
-        // if (entry->frameNumber) free(entry->frameNumber);
+        if (!entry) continue;
+        if (entry->pageNumber) {
+            free(entry->pageNumber);
+            entry->pageNumber = NULL;
+        }
+        if (entry->frameNumber) {
+            free(entry->frameNumber);
+            entry->frameNumber = NULL;
+        }
         free(entry);
+        entry = NULL;
     }
 
     if (mem->TLB) free(mem->TLB);
