@@ -2,9 +2,8 @@
 
 #include "libs.h"
 
-int FRAME_NUMBER = 0;
 int OLDEST_TBL = 0;
-int OLDEST_PT = 0;
+int OLDEST_PHYSICAL = 0;
 time_t seconds;
 
 typedef struct memory {
@@ -21,13 +20,13 @@ typedef struct memory {
 typedef struct entry {
     int *pageNumber;
     int *frameNumber;
-    double time;
+    double timeEntry;
 } Entry;
 
 typedef struct frame {
     int *frameNumber;
-    bool available;
     void *data;
+    double timeFrame;
 } Frame;
 
 typedef struct address {
@@ -43,13 +42,20 @@ void memoryManagement(void *memory, FILE *testFile, PageReplaceAlgorithm pageRep
     Memory *mem = memory;
     int totalAccess = 0;
     FILE *bin = fopen(BIN_FILE, "r");
-    FILE *output = fopen(OUTPUT_FILE, "w");
+    FILE *output = NULL;
+
+    clock_t begin = clock();
+
+    if (pageReplaceAlgorithm == FIFO) {
+        output = fopen(OUTPUT_FILE_FIFO, "w");
+    } else {
+        output = fopen(OUTPUT_FILE_LRU, "w");
+    }
 
     while (!feof(testFile)) {
         Address *address = NULL;
         Frame *frame = NULL;
         int toPrint = 0;
-        int frameToSet;
 
         int logicalDecimal;
         fscanf(testFile, "%d", &logicalDecimal);
@@ -61,7 +67,6 @@ void memoryManagement(void *memory, FILE *testFile, PageReplaceAlgorithm pageRep
         int offset = binaryToDecimal(offsetBin, 8);
 
         free(logicalBinary);
-
         Entry *foundFrame = lookForPageTLB(mem, pageNumber);  // binary frame number
         if (!foundFrame) {                                    // TLB MISS
 
@@ -69,11 +74,10 @@ void memoryManagement(void *memory, FILE *testFile, PageReplaceAlgorithm pageRep
             if (!foundFrame) {  // PAGE TABLE MISS
 
                 fseek(bin, page, SEEK_SET);  // Go to page in bin file
-                frame = createFrame(decimalToBinary(FRAME_NUMBER, 8));
+                frame = createFrame();       // ta vazando memoria aq
                 Address **data = frame->data;
-                FRAME_NUMBER++;
 
-                for (int i = 0; i < 256; i++) {  // Writing data to frame
+                for (int i = 0; i < mem->framesSize; i++) {  // Writing data to frame
                     address = createAddress();
                     address->offset = decimalToBinary(i, 8);
                     address->pageNumber = pageNumber;
@@ -83,25 +87,18 @@ void memoryManagement(void *memory, FILE *testFile, PageReplaceAlgorithm pageRep
                         toPrint = address->value;
                     }
                 }
-                frame->available = false;
 
-                for (int i = 0; i < mem->frames; i++) {  // Add frame to physical memory
-                    if (!mem->physicalMemory[i]) {
-                        mem->physicalMemory[i] = frame;
-                        frameToSet = i;
-                        break;
-                    }
-                }
+                // Adding frame to physical memory
+                pageReplaceAlgorithm(mem, frame, NULL, 1);
 
-                Entry *entry = createEntry(pageNumber, decimalToBinary(frameToSet, 8));
+                Entry *entry = createEntry(pageNumber, frame->frameNumber);
 
-                pageReplaceAlgorithm(mem, mem->TLB, entry, TLB_ENTRIES);
+                addToPageTable(mem, entry, PAGE_ENTRIES);
 
-                pageReplaceAlgorithm(mem, mem->pageTable, entry, PAGE_ENTRIES);
+                // Adding new entry to the created frame in the TLB
+                pageReplaceAlgorithm(mem, NULL, entry, 0);
 
-                int *auxFrame = decimalToBinary(frameToSet, 8);
-                printAddress(output, offsetBin, auxFrame, logicalDecimal, toPrint);
-                free(auxFrame);
+                printAddress(output, offsetBin, frame->frameNumber, logicalDecimal, toPrint, "AUX");
                 mem->pageFault++;
 
             } else {  // PAGE TABLE HIT
@@ -111,25 +108,50 @@ void memoryManagement(void *memory, FILE *testFile, PageReplaceAlgorithm pageRep
                 Frame **auxFrame = (Frame **)mem->physicalMemory;
                 Address **data = auxFrame[frameNumber]->data;
                 int valor = data[offset]->value;
-                printAddress(output, offsetBin, ((Entry *)foundFrame)->frameNumber, logicalDecimal, valor);
+                printAddress(output, offsetBin, ((Entry *)foundFrame)->frameNumber, logicalDecimal, valor, "PT");
             }
 
         } else {  // TLB HIT
-            // printf("TLB HIT\n");
             // printBinary(foundFrame, 8);
+            // printf("TLB HIT %p\n", foundFrame);
             int frameNumber = binaryToDecimal(((Entry *)foundFrame)->frameNumber, 8);
             Frame **auxFrame = (Frame **)mem->physicalMemory;
             Address **data = auxFrame[frameNumber]->data;
             int valor = data[offset]->value;
-            printAddress(output, offsetBin, ((Entry *)foundFrame)->frameNumber, logicalDecimal, valor);
+            printAddress(output, offsetBin, ((Entry *)foundFrame)->frameNumber, logicalDecimal, valor, "TLB");
         }
 
         free(offsetBin);
         totalAccess++;
     }
+    clock_t end = clock();
+    double timeSpent = (double)(end - begin) / CLOCKS_PER_SEC;
+
+    printStats(output, mem, totalAccess, pageReplaceAlgorithm, timeSpent);
+
+    fclose(output);
+    fclose(bin);
+}
+
+void printAddress(FILE *output, int *offsetBin, int *frameBin, int logicalDecimal, int toPrint, char *in) {
+    int *physicalAddress = calloc(16, sizeof(int));
+    for (int i = 0; i < 8; i++) {
+        physicalAddress[i] = offsetBin[i];
+    }
+    for (int i = 8; i < 16; i++) {
+        physicalAddress[i] = frameBin[i - 8];
+    }
+
+    fprintf(output, "%s Virtual address: %d Physical address: %d Value: %d\n", in, logicalDecimal, binaryToDecimal(physicalAddress, 16), toPrint);
+    free(physicalAddress);
+}
+
+void printStats(FILE *output, void *memory, int totalAccess, PageReplaceAlgorithm pageReplaceAlgorithm, double timeSpent) {
+    Memory *mem = memory;
 
     fprintf(output, "\n\nAluno: Marco Tulio Alves de Barros\n");
-    fprintf(output, "Resultados para %s com %d frames\n", pageReplaceAlgorithm == FIFOAlgorithm ? "FIFO" : "LRU", mem->frames);
+    fprintf(output, "Resultados para %s com %d frames\n", pageReplaceAlgorithm == FIFO ? "FIFO" : "LRU", mem->frames);
+    fprintf(output, "Running time: %f\n", timeSpent);
     fprintf(output, "\n+------------------+------------+-----------------+\n");
     fprintf(output, "| %-16s | %-10s | %-15s |\n", "CATEGORY", "COUNT", "RATE");
     fprintf(output, "+------------------+------------+-----------------+\n");
@@ -139,76 +161,196 @@ void memoryManagement(void *memory, FILE *testFile, PageReplaceAlgorithm pageRep
     fprintf(output, "| %-16s | %-10d | %.2f%%           |\n", "TLB HIT", mem->hitTlb, (float)mem->hitTlb / totalAccess * 100);
     fprintf(output, "| %-16s | %-10d | %.2f%%          |\n", "Page Table HIT", mem->hitPage, (float)mem->hitPage / totalAccess * 100);
     fprintf(output, "+------------------+------------+-----------------+\n");
-
-
-    fclose(output);
-    fclose(bin);
 }
 
-void printAddress(FILE *output, int *offsetBin, int *frameBin, int logicalDecimal, int toPrint) {
-    int *physicalAddress = calloc(16, sizeof(int));
-    for (int i = 0; i < 8; i++) {
-        physicalAddress[i] = offsetBin[i];
-    }
-    for (int i = 8; i < 16; i++) {
-        physicalAddress[i] = frameBin[i - 8];
-    }
+void FIFO(void *mem, void *frame, void *entry, int type) {
+    Memory *memory = mem;
 
-    fprintf(output, "Virtual address: %d Physical address: %d Value: %d\n", logicalDecimal, binaryToDecimal(physicalAddress, 16), toPrint);
-    free(physicalAddress);
-}
-
-void FIFOAlgorithm(void *mem, void **memoryType, void *entry, int size) {
-    for (int i = 0; i < size; i++) {
-        if (!memoryType[i]) {
-            memoryType[i] = entry;
-            return;
+    if (type == 0) {
+        for (int i = 0; i < TLB_ENTRIES; i++) {
+            void **tlb = memory->TLB;
+            if (!tlb[i]) {  // ainda tem espaço na tlb
+                tlb[i] = entry;
+                // printf("%p Page number in TLB[%d] = %d\n", entry, i, binaryToDecimal(((Entry *)tlb[i])->pageNumber, 8));
+                return;
+            }
         }
-    }
 
-    // Memory *memory = mem;
-    if (size == 16) {
-        // Entry *oldest = memoryType[OLDEST_TBL];
-        // Frame *vazando = memory->physicalMemory[binaryToDecimal(oldest->frameNumber, 8)];
-        memoryType[OLDEST_TBL] = entry;
-        OLDEST_TBL = (OLDEST_TBL + 1) % 16;
+        // FIFO sem segunda chance para substituir
+        memory->TLB[OLDEST_TBL] = entry;
+        OLDEST_TBL = (OLDEST_TBL + 1) % TLB_ENTRIES;  
 
     } else {
-        // Entry *oldest = memoryType[OLDEST_TBL];
-        // Frame *vazando = (memory->physicalMemory[binaryToDecimal(oldest->frameNumber, 8)]);
-        memoryType[OLDEST_PT] = entry;
-        OLDEST_PT = (OLDEST_PT + 1) % 256;
+        for (int i = 0; i < memory->frames; i++) {
+            if (!memory->physicalMemory[i]) {  // tinha espaço na memoria fisica
+                memory->physicalMemory[i] = frame;
+                ((Frame *)frame)->frameNumber = decimalToBinary(i, 8);
+                return;
+            }
+        }
+
+        // limpando frame mais antigo da memoria fisica
+        int pageToRemove;
+        Frame *oldest = memory->physicalMemory[OLDEST_PHYSICAL];
+        for (int i = 0; i < memory->framesSize; i++) {
+            void **data = oldest->data;
+            if (data) {
+                Address *address = data[i];
+                if (address) {
+                    pageToRemove = binaryToDecimal(address->pageNumber, 8);
+                    if (address->offset) {
+                        free(address->offset);
+                        address->offset = NULL;
+                    }
+                    if (address->logicalAddress) {
+                        free(address->logicalAddress);
+                        address->logicalAddress = NULL;
+                    }
+                    if (address) free(address);
+                }
+            }
+        }
+        if (oldest->data) {
+            free(oldest->data);
+            oldest->data = NULL;
+        } 
+            
+        if (oldest->frameNumber) {
+            free(oldest->frameNumber);
+            oldest->frameNumber = NULL;
+        }
+        free(oldest);
+        memory->physicalMemory[OLDEST_PHYSICAL] = NULL;
+
+        updateMemory(memory, pageToRemove);
+
+        ((Frame *) frame)->frameNumber = decimalToBinary(OLDEST_PHYSICAL, 8);
+        memory->physicalMemory[OLDEST_PHYSICAL] = frame;
+        OLDEST_PHYSICAL = (OLDEST_PHYSICAL + 1) % memory->frames;  // FIFO sem segunda chance
+
+        // a entrada desse elemento na tabela de paginas ou tlb nao foi removida
     }
 }
 
-void LRUAlgorithm(void *mem, void **memoryType, void *entry, int size) {
-    if (!memoryType[0]) {
-        memoryType[0] = entry;
-        return;
-    }
-    double oldest = ((Entry *)memoryType[0])->time;
-    int oldestIndex = 0;
+void LRU(void *mem, void *frame, void *entry, int type) {
+    Memory *memory = mem;
 
+    if (type == 0) {
+        void **tlb = memory->TLB;
+        double oldestTime;
+        for (int i = 0; i < TLB_ENTRIES; i++) {
+            if (tlb[i]) {
+                oldestTime = ((Entry *)tlb[i])->timeEntry;
+                break;
+            }
+        }
+        int oldestIndex = 0;
+        for (int i = 0; i < TLB_ENTRIES; i++) {
+            if (!tlb[i]) {
+                tlb[i] = entry;
+                return;
+            }
+            if (((Entry *)tlb[i])->timeEntry < oldestTime) {
+                oldestTime = ((Entry *)tlb[i])->timeEntry;
+                oldestIndex = i;
+            }
+        }
+
+        tlb[oldestIndex] = entry;
+    
+    } else {
+
+        double oldestTime;
+        for (int i = 0; i < memory->frames; i++) {
+            if (memory->physicalMemory[i]) {
+                oldestTime = ((Frame *)memory->physicalMemory[i])->timeFrame;
+                break;
+            }
+        }
+        int oldestIndex = 0;
+        for (int i = 0; i < memory->frames; i++) {
+            if (!memory->physicalMemory[i]) {  // tinha espaço na memoria fisica
+                memory->physicalMemory[i] = frame;
+                ((Frame *)frame)->frameNumber = decimalToBinary(i, 8);
+                return;
+            }
+            if (((Frame *)memory->physicalMemory[i])->timeFrame < oldestTime) {
+                oldestTime = ((Frame *)memory->physicalMemory[i])->timeFrame;
+                oldestIndex = i;
+            }
+        }
+
+        // limpando frame mais antigo da memoria fisica
+        int pageToRemove;
+        Frame *oldest = memory->physicalMemory[oldestIndex];
+        for (int i = 0; i < memory->framesSize; i++) {
+            void **data = oldest->data;
+            if (data) {
+                Address *address = data[i];
+                if (address) {
+                    pageToRemove = binaryToDecimal(address->pageNumber, 8);
+                    if (address->offset) {
+                        free(address->offset);
+                        address->offset = NULL;
+                    }
+                    if (address->logicalAddress) {
+                        free(address->logicalAddress);
+                        address->logicalAddress = NULL;
+                    }
+                    if (address) free(address);
+                }
+            }
+        }
+        if (oldest->data) {
+            free(oldest->data);
+            oldest->data = NULL;
+        }
+        if (oldest->frameNumber) {
+            free(oldest->frameNumber);
+            oldest->frameNumber = NULL;
+        }
+        free(oldest);
+        memory->physicalMemory[oldestIndex] = NULL;
+
+        updateMemory(memory, pageToRemove);
+
+        ((Frame *) frame)->frameNumber = decimalToBinary(oldestIndex, 8);
+        memory->physicalMemory[oldestIndex] = frame;
+
+        // a entrada desse elemento na tabela de paginas ou tlb nao foi removida
+    }
+}
+
+void addToPageTable(void *memory, void *entry, int size) {
+    Memory *mem = memory;
     for (int i = 0; i < size; i++) {
-        if (!memoryType[i]) {
-            memoryType[i] = entry;
+        if (!mem->pageTable[i]) {
+            mem->pageTable[i] = entry;
             return;
         }
-        if (((Entry *)memoryType[i])->time < oldest) {
-            oldest = ((Entry *)memoryType[i])->time;
-            oldestIndex = i;
+    }
+}
+
+void updateMemory(void *mem, int pageToRemove) {
+    Memory *memory = mem;
+    for (int i = 0; i < TLB_ENTRIES; i++) {
+        if (!memory->TLB[i]) continue;
+        if (binaryToDecimal(((Entry *)memory->TLB[i])->pageNumber, 8) == pageToRemove) {
+            memory->TLB[i] = NULL;
         }
     }
-    // Memory *memory = mem;
-    // Entry *oldestEntry = memoryType[oldestIndex];
-    // Frame *vazando = (memory->physicalMemory[binaryToDecimal(oldestEntry->frameNumber, 8)]);
-    memoryType[oldestIndex] = entry;
+    for (int i = 0; i < PAGE_ENTRIES; i++) {
+        if (!memory->pageTable[i]) continue;
+        if (binaryToDecimal(((Entry *)memory->pageTable[i])->pageNumber, 8) == pageToRemove) {
+            memory->pageTable[i] = NULL;
+        }
+    }
 }
 
 void *createMemory(int frames) {
     Memory *memory = calloc(1, sizeof(Memory));
     memory->frames = frames;
-    memory->framesSize = PHYSICAL_MEM_SIZE / frames;
+    memory->framesSize = PAGE_SIZE;
     memory->TLB = calloc(TLB_ENTRIES, sizeof(Entry));
     memory->pageTable = calloc(PAGE_ENTRIES, sizeof(Entry));
     memory->physicalMemory = calloc(frames, sizeof(Frame));
@@ -219,15 +361,14 @@ void *createEntry(int *pageNumber, int *frameNumber) {
     Entry *entry = calloc(1, sizeof(Entry));
     entry->pageNumber = pageNumber;
     entry->frameNumber = frameNumber;
-    entry->time = time(&seconds);
+    entry->timeEntry = time(&seconds);
     return entry;
 }
 
-void *createFrame(int *frameNumber) {
+void *createFrame() {
     Frame *frame = calloc(1, sizeof(Frame));
-    frame->frameNumber = frameNumber;
-    frame->available = true;
     frame->data = calloc(PAGE_SIZE, sizeof(Address));
+    frame->timeFrame = time(&seconds);
     return frame;
 }
 
@@ -285,22 +426,6 @@ int *getLogicalAddress(int *binary) {
     return logicalAddress;
 }
 
-bool compareBinarys(int *binary1, int *binary2) {
-    for (int i = 0; i < 32; i++) {
-        if (binary1[i] != binary2[i]) {
-            return false;
-        }
-    }
-    return true;
-}
-
-void printBinary(int *binary, int size) {
-    for (int i = size - 1; i >= 0; i--) {
-        printf("%d", binary[i]);
-    }
-    printf("\n");
-}
-
 void *lookForPageTLB(void *memory, int *page) {
     Memory *mem = memory;
     for (int i = 0; i < TLB_ENTRIES; i++) {
@@ -313,7 +438,7 @@ void *lookForPageTLB(void *memory, int *page) {
                     // int *foundFrame = ((Entry *)mem->TLB[i])->frameNumber;
                     // printf("TLB HIT\n");
                     // printBinary(foundFrame, 8);
-                    ((Entry *)mem->TLB[i])->time = time(&seconds);
+                    ((Entry *)mem->TLB[i])->timeEntry = time(&seconds);
                     mem->hitTlb++;
                     return mem->TLB[i];
                 }
@@ -335,7 +460,7 @@ void *lookForPageTable(void *memory, int *page) {
                     // int *foundFrame = ((Entry *)mem->pageTable[i])->frameNumber;
                     // printf("PAGE TABLE HIT\n");
                     // printBinary(foundFrame, 8);
-                    ((Entry *)mem->pageTable[i])->time = time(&seconds);
+                    ((Entry *)mem->pageTable[i])->timeEntry = time(&seconds);
                     mem->hitPage++;
                     return mem->pageTable[i];
                 }
@@ -366,7 +491,7 @@ void freeMemory(void *memory) {
                         free(address->logicalAddress);
                         address->logicalAddress = NULL;
                     }
-                   
+
                     if (address) free(address);
                 }
                 free(data);
@@ -386,10 +511,6 @@ void freeMemory(void *memory) {
         if (entry->pageNumber) {
             free(entry->pageNumber);
             entry->pageNumber = NULL;
-        }
-        if (entry->frameNumber) {
-            free(entry->frameNumber);
-            entry->frameNumber = NULL;
         }
         free(entry);
         entry = NULL;

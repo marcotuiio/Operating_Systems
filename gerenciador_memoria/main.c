@@ -16,10 +16,10 @@ int main(int argc, char *argv[]) {
     void *memory = createMemory(atoi(argv[2]));
     
     if (!strcmp(argv[3], "fifo") || !strcmp(argv[3], "FIFO")) {
-        memoryManagement(memory, test, FIFOAlgorithm);
+        memoryManagement(memory, test, FIFO);
 
     } else if (!strcmp(argv[3], "lru") || !strcmp(argv[3], "LRU")) {
-        memoryManagement(memory, test, LRUAlgorithm);
+        memoryManagement(memory, test, LRU);
 
     } else {
         printf("ERRO Algoritmo nao reconhecido!\nApenas FIFO ou LRU disponiveis\n");

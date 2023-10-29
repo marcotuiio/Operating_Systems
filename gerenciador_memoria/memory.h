@@ -4,18 +4,24 @@
 #include "libs.h"
 
 // Tipo de algoritmo de substituicao de paginas de forma generica no prototipo da funcao
-typedef void (*PageReplaceAlgorithm)(void *mem, void **memoryType, void *entry, int size);
+typedef void (*PageReplaceAlgorithm)(void *mem, void *frame, void *entry, int type);
 
 // Realiza a logica principal do gerenciamento de memoria
 // Leitura da memoria auxiliar, busca nas tabelas e TLB, e chama substituicao de paginas
 void memoryManagement(void *memory, FILE *testFile, PageReplaceAlgorithm pageReplaceAlgorithm);
 
-// Calcula endereço físico e imprime na tela
-void printAddress(FILE *output, int *offsetBin, int *frameBin, int logicalDecimal, int toPrint);
+// Calcula endereço físico e imprime na tela e printa as estatisticas de page fault e tlb hit
+void printAddress(FILE *output, int *offsetBin, int *frameBin, int logicalDecimal, int toPrint, char *in);
+void printStats(FILE *output, void *memory, int totalAccess, PageReplaceAlgorithm pageReplaceAlgorithm, double timeSpent);
 
-// Algoritmos de substituicao de paginas
-void FIFOAlgorithm(void *mem, void **memoryType, void *entry, int size);
-void LRUAlgorithm(void *mem, void **memoryType, void *entry, int size);
+// Algoritmos de substituicao de paginas. 
+// Fifo sem segunda chance, leva em consideração apenas a ordem que o elemento foi inserido na memoria
+// LRU, leva em consideração a ordem em relação ao tempo que o elemento foi inserido na memoria e a ultima vez que foi acessado
+// O update de memoria é para manter a consistencia na TLB e PageTable após uma substituicao na memoria fisica
+void FIFO(void *mem, void *frame, void *entry, int type);
+void LRU(void *mem, void *frame, void *entry, int type);
+void addToPageTable(void *memory, void *entry, int size);
+void updateMemory(void *mem, int pageToRemove);
 
 // Cria a estrutura principal da memoria com os tamanhos estabelecidos
 void *createMemory(int frames);
@@ -24,7 +30,7 @@ void *createMemory(int frames);
 void *createEntry(int *pageNumber, int *frameNumber);
 
 // Cria a estrutura de um frame da memoria
-void *createFrame(int *frameNumber);
+void *createFrame();
 
 // Cria a estrutura de um endereco de memoria
 void *createAddress();
@@ -35,17 +41,10 @@ void *decimalToBinary(int decimal, int size);
 // Converte um binario para decimal
 int binaryToDecimal(int *binary, int size);
 
-// Separa o binario em endereco, pagina e offset
-void separeteAddress(void *addr);
+// Retorna o offset, o numero da pagina e o endereco logico do endeço virtual em binario
 int *getOffSet(int *binary);
 int *getPageNumber(int *binary);
 int *getLogicalAddress(int *binary);
-
-// Comparacao dois binarios
-bool compareBinarys(int *binary1, int *binary2);
-
-// Printa um binario
-void printBinary(int *binary, int size);
 
 // Busca pela pagina na TLB
 void *lookForPageTLB(void *memory, int *page);

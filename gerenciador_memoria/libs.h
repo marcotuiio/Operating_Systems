@@ -12,7 +12,8 @@
 #define PAGE_SIZE 256  // tamanho em bytes de cada pagina
 #define TLB_ENTRIES 16   // qntd de entradas na cache TLB
 #define PHYSICAL_MEM_SIZE 65536  // tamanho em bytes da memoria fisica
-#define BIN_FILE "BACKING_STORE_sequencial.bin"
-#define OUTPUT_FILE "correct.txt"
+#define BIN_FILE "BACKING_STORE.bin"
+#define OUTPUT_FILE_FIFO "correct_fifo.txt"
+#define OUTPUT_FILE_LRU "correct_lru.txt"
 
 #endif
