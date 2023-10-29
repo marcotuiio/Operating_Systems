@@ -1002,7 +1002,7 @@ AUX Virtual address: 12107 Physical address: 4427 Value: 186
 
 Aluno: Marco Tulio Alves de Barros
 Resultados para FIFO com 32 frames
-Running time: 0.072283
+Running time: 0.110851
 
 +------------------+------------+-----------------+
 | CATEGORY         | COUNT      | RATE            |

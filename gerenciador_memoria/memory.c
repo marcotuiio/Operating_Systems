@@ -18,19 +18,18 @@ typedef struct memory {
 } Memory;
 
 typedef struct entry {
-    int *pageNumber;
-    int *frameNumber;
-    double timeEntry;
+    int *pageNumber;   // mapeamento da pagina
+    int *frameNumber;  // indice do frame na memoria fisica
+    double timeEntry;  // tempo de atualizacao na memoria
 } Entry;
 
 typedef struct frame {
-    int *frameNumber;
-    void *data;
-    double timeFrame;
+    int *frameNumber;  // indice do frame na memoria fisica em binario
+    void *data;        // vetor de enderecos
+    double timeFrame;  // tempo de atualizacao na memoria
 } Frame;
 
 typedef struct address {
-    // int *binary;          // 32 bits
     int *offset;          // 8 bits menos significativos
     int *pageNumber;      // 8 bits do meio
     int *logicalAddress;  // 16 bits mais significativos
@@ -65,8 +64,8 @@ void memoryManagement(void *memory, FILE *testFile, PageReplaceAlgorithm pageRep
         int page = binaryToDecimal(pageNumber, 8);
         int *offsetBin = getOffSet(logicalBinary);
         int offset = binaryToDecimal(offsetBin, 8);
-
         free(logicalBinary);
+
         Entry *foundFrame = lookForPageTLB(mem, pageNumber);  // binary frame number
         if (!foundFrame) {                                    // TLB MISS
 
@@ -88,22 +87,23 @@ void memoryManagement(void *memory, FILE *testFile, PageReplaceAlgorithm pageRep
                     }
                 }
 
-                // Adding frame to physical memory
+                // Colocando o novo frame na memoria fisica e mantendo coerencia na TLB e na page table
                 pageReplaceAlgorithm(mem, frame, NULL, 1);
 
                 Entry *entry = createEntry(pageNumber, frame->frameNumber);
 
+                // Colocando o a entry referente ao novo frame na page table
                 addToPageTable(mem, entry, PAGE_ENTRIES);
 
-                // Adding new entry to the created frame in the TLB
+                // Colocando a entry referente ao novo frame na TLB
                 pageReplaceAlgorithm(mem, NULL, entry, 0);
 
                 printAddress(output, offsetBin, frame->frameNumber, logicalDecimal, toPrint, "AUX");
                 mem->pageFault++;
 
             } else {  // PAGE TABLE HIT
-                // printf("PAGE TABLE HIT\n");
-                // printBinary(foundFrame, 8);
+
+                free(pageNumber);  // se achou na page table, nao precisa mais do numero da pagina
                 int frameNumber = binaryToDecimal(((Entry *)foundFrame)->frameNumber, 8);
                 Frame **auxFrame = (Frame **)mem->physicalMemory;
                 Address **data = auxFrame[frameNumber]->data;
@@ -112,8 +112,8 @@ void memoryManagement(void *memory, FILE *testFile, PageReplaceAlgorithm pageRep
             }
 
         } else {  // TLB HIT
-            // printBinary(foundFrame, 8);
-            // printf("TLB HIT %p\n", foundFrame);
+
+            free(pageNumber);  // se achou na tlb, nao precisa mais do numero da pagina
             int frameNumber = binaryToDecimal(((Entry *)foundFrame)->frameNumber, 8);
             Frame **auxFrame = (Frame **)mem->physicalMemory;
             Address **data = auxFrame[frameNumber]->data;
@@ -177,7 +177,7 @@ void FIFO(void *mem, void *frame, void *entry, int type) {
 
         // FIFO sem segunda chance para substituir
         memory->TLB[OLDEST_TBL] = entry;
-        OLDEST_TBL = (OLDEST_TBL + 1) % TLB_ENTRIES;  
+        OLDEST_TBL = (OLDEST_TBL + 1) % TLB_ENTRIES;
 
     } else {
         for (int i = 0; i < memory->frames; i++) {
@@ -212,8 +212,8 @@ void FIFO(void *mem, void *frame, void *entry, int type) {
         if (oldest->data) {
             free(oldest->data);
             oldest->data = NULL;
-        } 
-            
+        }
+
         if (oldest->frameNumber) {
             free(oldest->frameNumber);
             oldest->frameNumber = NULL;
@@ -223,11 +223,9 @@ void FIFO(void *mem, void *frame, void *entry, int type) {
 
         updateMemory(memory, pageToRemove);
 
-        ((Frame *) frame)->frameNumber = decimalToBinary(OLDEST_PHYSICAL, 8);
+        ((Frame *)frame)->frameNumber = decimalToBinary(OLDEST_PHYSICAL, 8);
         memory->physicalMemory[OLDEST_PHYSICAL] = frame;
         OLDEST_PHYSICAL = (OLDEST_PHYSICAL + 1) % memory->frames;  // FIFO sem segunda chance
-
-        // a entrada desse elemento na tabela de paginas ou tlb nao foi removida
     }
 }
 
@@ -256,9 +254,8 @@ void LRU(void *mem, void *frame, void *entry, int type) {
         }
 
         tlb[oldestIndex] = entry;
-    
-    } else {
 
+    } else {
         double oldestTime;
         for (int i = 0; i < memory->frames; i++) {
             if (memory->physicalMemory[i]) {
@@ -313,10 +310,8 @@ void LRU(void *mem, void *frame, void *entry, int type) {
 
         updateMemory(memory, pageToRemove);
 
-        ((Frame *) frame)->frameNumber = decimalToBinary(oldestIndex, 8);
+        ((Frame *)frame)->frameNumber = decimalToBinary(oldestIndex, 8);
         memory->physicalMemory[oldestIndex] = frame;
-
-        // a entrada desse elemento na tabela de paginas ou tlb nao foi removida
     }
 }
 
@@ -466,9 +461,6 @@ void *lookForPageTLB(void *memory, int *page) {
                 break;
             } else {
                 if (j == 7) {
-                    // int *foundFrame = ((Entry *)mem->TLB[i])->frameNumber;
-                    // printf("TLB HIT\n");
-                    // printBinary(foundFrame, 8);
                     ((Entry *)mem->TLB[i])->timeEntry = time(&seconds);
                     mem->hitTlb++;
                     return mem->TLB[i];
@@ -488,9 +480,6 @@ void *lookForPageTable(void *memory, int *page) {
                 break;
             } else {
                 if (j == 7) {
-                    // int *foundFrame = ((Entry *)mem->pageTable[i])->frameNumber;
-                    // printf("PAGE TABLE HIT\n");
-                    // printBinary(foundFrame, 8);
                     ((Entry *)mem->pageTable[i])->timeEntry = time(&seconds);
                     mem->hitPage++;
                     return mem->pageTable[i];

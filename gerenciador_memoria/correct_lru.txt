@@ -1002,7 +1002,7 @@ TLB Virtual address: 12107 Physical address: 2635 Value: 186
 
 Aluno: Marco Tulio Alves de Barros
 Resultados para LRU com 32 frames
-Running time: 0.071103
+Running time: 0.111050
 
 +------------------+------------+-----------------+
 | CATEGORY         | COUNT      | RATE            |
