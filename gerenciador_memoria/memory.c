@@ -171,7 +171,6 @@ void FIFO(void *mem, void *frame, void *entry, int type) {
             void **tlb = memory->TLB;
             if (!tlb[i]) {  // ainda tem espaço na tlb
                 tlb[i] = entry;
-                // printf("%p Page number in TLB[%d] = %d\n", entry, i, binaryToDecimal(((Entry *)tlb[i])->pageNumber, 8));
                 return;
             }
         }
@@ -333,17 +332,49 @@ void addToPageTable(void *memory, void *entry, int size) {
 
 void updateMemory(void *mem, int pageToRemove) {
     Memory *memory = mem;
+    Entry *entryTLB = NULL;
+    Entry *entryPageTable = NULL;
     for (int i = 0; i < TLB_ENTRIES; i++) {
         if (!memory->TLB[i]) continue;
         if (binaryToDecimal(((Entry *)memory->TLB[i])->pageNumber, 8) == pageToRemove) {
+            entryTLB = memory->TLB[i];
             memory->TLB[i] = NULL;
         }
     }
     for (int i = 0; i < PAGE_ENTRIES; i++) {
         if (!memory->pageTable[i]) continue;
         if (binaryToDecimal(((Entry *)memory->pageTable[i])->pageNumber, 8) == pageToRemove) {
+            entryPageTable = memory->pageTable[i];
             memory->pageTable[i] = NULL;
         }
+    }
+
+    if (entryTLB == entryPageTable) {
+        if (entryTLB->pageNumber) {
+            free(entryTLB->pageNumber);
+            entryTLB->pageNumber = NULL;
+        }
+        free(entryTLB);
+        entryTLB = NULL;
+        return;
+    }
+    if (entryTLB) {
+        if (entryTLB->pageNumber) {
+            free(entryTLB->pageNumber);
+            entryTLB->pageNumber = NULL;
+        }
+        free(entryTLB);
+        entryTLB = NULL;
+        return;
+    }
+    if (entryPageTable) {
+        if (entryPageTable->pageNumber) {
+            free(entryPageTable->pageNumber);
+            entryPageTable->pageNumber = NULL;
+        }
+        free(entryPageTable);
+        entryPageTable = NULL;
+        return;
     }
 }
 
@@ -491,7 +522,6 @@ void freeMemory(void *memory) {
                         free(address->logicalAddress);
                         address->logicalAddress = NULL;
                     }
-
                     if (address) free(address);
                 }
                 free(data);
