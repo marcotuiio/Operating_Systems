@@ -2,6 +2,13 @@
 
 ### Marco Túlio Alves de Barros     27/10/2023
 
+## USAGE INSTRUCTIONS:
+
+1º type 'make' to generate the exe
+2º type ./gerenciador_memoria <arquivo_teste.txt> <qntd_frames> <algoritmo_de_substituicao>
+
+* remember to replace the args with the correct and expected values
+
 ## Introduction
 
 This project aims to simulate a memory manager using the C programming language. It utilizes a Translation Lookaside Buffer (TLB) and a page table for address translation and physical address lookup.
